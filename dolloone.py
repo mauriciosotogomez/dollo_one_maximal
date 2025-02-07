@@ -2,12 +2,39 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import copy
 import RedBlackGraph as rbg 
+from argparse import ArgumentParser
+
+
+#######################
+# Read Input  #
+#######################
+
+parser = ArgumentParser()
+
+parser.add_argument("-f", "--input_file",
+                   dest="input_file", default=None,
+                   help="use this .csv file as input")
+
+parser.add_argument("-v",
+                    action="store_true",
+                    help="verbose")
+
+args = parser.parse_args()
+
+########################
 
 # Create a new instance of the BlackRedGraph
 graph = rbg.RedBlackGraph()
+data_file = 'data/example_01.txt'
+verbose = args.v
 
-graph.read_from_file('example_02.txt')
-graph.plot_graph()
+# Get problem input matrix
+if args.input_file is not None:
+    data_file = args.input_file
+
+graph.read_from_file(data_file)
+if verbose:
+    graph.plot_graph()
 
 def reduction_recursive(rb_graph) :
 
@@ -26,7 +53,7 @@ def reduction_recursive(rb_graph) :
         if len(Cu) == 0 :
             print('CASE CONTAINED')
             next_characters = list(Cc)
-            rb_graph.reduce(next_characters)
+            rb_graph.reduce(next_characters,verbose)
             reduction_extension = reduction_recursive(rb_graph)
             return next_characters+reduction_extension
         # Ci empty
@@ -39,7 +66,7 @@ def reduction_recursive(rb_graph) :
                 rb_graph_copy = copy.deepcopy(rb_graph)
                 next_characters = list(Grb.neighbors(s0))
                 print('Try:', s0, next_characters)
-                rb_graph_copy.reduce(next_characters)
+                rb_graph_copy.reduce(next_characters, verbose)
                 reduction_extension = reduction_recursive(rb_graph_copy)
              
                 if 'fail' not in reduction_extension :
@@ -53,12 +80,18 @@ def reduction_recursive(rb_graph) :
     else : 
         print('CASE pi_U')
         next_characters = rb_graph.compute_pi_U()
-        rb_graph.reduce(next_characters)
+        rb_graph.reduce(next_characters, verbose)
         reduction_extension = reduction_recursive(rb_graph)
         return next_characters+reduction_extension
 
-
-print(f'{reduction_recursive(graph)}')
+reduction = reduction_recursive(graph)
+is_correct = ('fail' not in reduction) 
+print()
+if is_correct :
+    print("\033[1m\033[92m {}\033[00m" .format('SUCESS:')) # Green
+    print(reduction)
+else :
+    print("\033[91m {}\033[00m" .format('FAIL')) # Red
 
 # reduction =  ['C'+str(i) for i in [1,2,3,4,6,5]]
 # graph.reduce(reduction)

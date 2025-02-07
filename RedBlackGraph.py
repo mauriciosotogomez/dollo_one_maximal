@@ -183,7 +183,7 @@ class RedBlackGraph:
     def realize(self, character_name):
         print('======')
         print(f'REALIZE character: {character_name}')
-        
+
         if character_name not in self.characters['intersection'] | self.characters['universal'] | self.characters['contained']:
             raise ValueError(f"Invalid character name: {character_name}")
 
@@ -222,6 +222,9 @@ class RedBlackGraph:
                     self.remove_edge(char_to_remove, species, 'red')
             else :
                 break
+            
+        #_,_,_,_ = self.update_partition()
+        
 
     def print_status(self):
         print(f'Species in black: {self.species["black"]}')
@@ -242,10 +245,11 @@ class RedBlackGraph:
         species_in_component = {node for node in component if self.graph.nodes[node]['bipartite'] == 1}
         return species_in_component
 
-    def reduce(self, reduction):
+    def reduce(self, reduction, verbose):
         for character in reduction:
             self.realize(character)
-            self.plot_graph()
+            if verbose:
+                self.plot_graph()
 
     def update_partition(self):
         temp_intersection = set()
@@ -289,7 +293,7 @@ class RedBlackGraph:
         #species_nodes = [n for n,v in self.graph.nodes(data=True) if v['bipartite'] == 1] 
         black_species_nodes = self.species['black']
         species_degrees = {node: self.graph.degree(node) for node in black_species_nodes}
-
+        species_degrees = dict( (n,deg) for n,deg in species_degrees.items() if deg > 0 )
         # Find the minimum degree
         min_degree = min(species_degrees.values())
     
