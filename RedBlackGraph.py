@@ -80,19 +80,20 @@ class RedBlackGraph:
                     self.character_counters[char_species][0] += 1
                     self.character_counters[char_species][1] += -1
             
-        # Add edge to the set and graph
+        # Add edge to the set and to the graph
         self.edges[color].append((character, species))
         self.graph.add_edge(character, species, color=color)
 
     def remove_edge(self, character, species, color):
         if (character, species) not in self.edges[color]:
-            raise ValueError("Invalid edge")
-                
+            raise ValueError("Invalid edge or color")
+
+        # Remove edge to the set and to the graph
         self.edges[color].remove((character, species))
         self.graph.remove_edge(character, species)
 
         # Update node counters
-        if color == 'black':
+        if color == 'black': # black edge
             self.species_counters[species][1] += -1
             if species in self.species['red']: # self.species_counters[species][0] > 0 : # red species
                 self.character_counters[character][0] += -1
@@ -101,12 +102,13 @@ class RedBlackGraph:
         else: # red edge
             self.character_counters[character][0] += -1
             self.species_counters[species][0] += -1
-            # If the species becomes black 
-            species_neighbors = set(self.graph.neighbors(species))
-            if all(character not in self.characters['active'] for character in species_neighbors):
+            # If the species becomes black (removed species becomes black)
+            if self.species_counters[species][0] == 0 :
+            # species_neighbors = set(self.graph.neighbors(species))
+            # if all(character not in self.characters['active'] for character in species_neighbors):
                 # Update species color
-                self.species['black'].add(species)
                 self.species['red'].discard(species)
+                self.species['black'].add(species)
                 # Update species neighbors counters
                 for char_species in self.graph.neighbors(species):
                     self.character_counters[char_species][0] += -1
@@ -115,10 +117,40 @@ class RedBlackGraph:
     def get_species(self):
         return self.species['red'] , self.species['black']
 
+    def from_networkx_graph(self, nx_graph):
+        """
+        Initialize a RedBlackGraph object from a NetworkX graph object.
+        Args:
+            nx_graph (networkx.Graph): The NetworkX graph object.
+        """
+        # Iterate over nodes
+        for node, data in nx_graph.nodes(data=True):
+            if data.get('bipartite') == 0:  # Character node
+                self.add_character(node, 'universal')
+            else:  # Species node
+                self.add_species(node, 'black')
+
+        # Iterate over edges
+        for character in self.characters:
+            if data.get('bipartite') == 0:  # Character node
+                self.add_character(node, 'universal')
+            else:  # Species node
+                self.add_species(node, 'black')
+
+        for u, v, data in nx_graph.edges(data=True):
+            color = data.get('color', 'black')
+            if nx_graph.nodes[u]['bipartite'] == 0 : # u is character
+                self.add_edge(u, v, color)
+            else : # u is species
+                self.add_edge(v, u, color)
+            
+        # Initialize the graph object
+        self.graph = nx_graph
+
     def plot_graph(self):
         char_nodes = [n for n,v in self.graph.nodes(data=True) if v['bipartite'] == 0] 
-        species_nodes = [n for n,v in self.graph.nodes(data=True) if v['bipartite'] == 1] 
-
+        species_nodes = [n for n,v in self.graph.nodes(data=True) if v['bipartite'] == 1]
+        
         pos = nx.bipartite_layout(self.graph, char_nodes, scale=3, align='horizontal')
         nx.draw_networkx_nodes(self.graph, pos, nodelist=char_nodes, node_color='b', node_size=1500,alpha=0.2)
         nx.draw_networkx_nodes(self.graph, pos, nodelist=species_nodes, node_color='gray', node_size=1500,alpha=0.2)
@@ -127,13 +159,13 @@ class RedBlackGraph:
         red_edges =   [(u,v) for u,v,e in self.graph.edges(data=True) if e['color'] == 'red']
         nx.draw_networkx_edges(self.graph, pos, edgelist=black_edges, edge_color='k')
         nx.draw_networkx_edges(self.graph, pos, edgelist=red_edges, edge_color='r')
-
+        
         char_labels = {node: node for node in char_nodes}
         species_labels = {node: node for node in species_nodes}
         labels = {**char_labels, **species_labels}
-
+        
         nx.draw_networkx_labels(self.graph, pos, labels, font_size=10, font_color='k')
-
+        
         plt.axis('off')
         plt.show()
 
@@ -181,8 +213,8 @@ class RedBlackGraph:
                     self.graph.add_edge(u, v, color=color)
 
     def realize(self, character_name):
-        print('======')
-        print(f'REALIZE character: {character_name}')
+        # print('======')
+        # print(f'REALIZE character: {character_name}')
 
         if character_name not in self.characters['intersection'] | self.characters['universal'] | self.characters['contained']:
             raise ValueError(f"Invalid character name: {character_name}")
@@ -192,7 +224,7 @@ class RedBlackGraph:
         # Get the neighbors of the character
         neighbors = set(self.graph.neighbors(character_name))
 
-        # Create red edges to non-neighbors and remove black edges
+        # Create red edges to non-neighbors in the same connected component and remove black edges
         for species in species_in_component:
             if species not in neighbors:
                 self.add_edge(character_name, species, 'red')
@@ -224,6 +256,7 @@ class RedBlackGraph:
                 break
             
         #_,_,_,_ = self.update_partition()
+        #self.print_status()
         
 
     def print_status(self):
@@ -239,13 +272,12 @@ class RedBlackGraph:
         print(f'Character counters: {self.character_counters}')
         print('--')
         
-
     def get_species_in_connected_component(self, character_name):
         component = nx.node_connected_component(self.graph, character_name)
         species_in_component = {node for node in component if self.graph.nodes[node]['bipartite'] == 1}
         return species_in_component
 
-    def reduce(self, reduction, verbose):
+    def reduce(self, reduction, verbose=False):
         for character in reduction:
             self.realize(character)
             if verbose:
@@ -256,20 +288,19 @@ class RedBlackGraph:
         temp_universal = set()
         temp_contained = set()
 
-        # # Recompute species sets
-        # for character in  self.characters['intersection'] | self.characters['universal'] | self.characters['contained']:
-        #     neighbors = set(self.graph.neighbors(character))
-
         for character in  self.characters['intersection'] | self.characters['universal'] | self.characters['contained']:
+            
             # Get the connected component and neighbors of the character
             species_in_component = self.get_species_in_connected_component(character)
             neighbors = set(self.graph.neighbors(character))
-
-            # Check the rules for each set
+            
+            # Check the rules for each set      
             has_red_species = any(species in self.species['red'] for species in neighbors)
             has_black_species = any(species in self.species['black'] for species in neighbors)
-            has_non_neighbor_red_species = any(species in self.species['red'] and species not in neighbors for species in species_in_component)
-
+            has_non_neighbor_red_species = any(species in self.species['red'] and species not in neighbors for species in species_in_component)            
+            has_red_species = self.character_counters[character][0] > 0
+            has_black_species = self.character_counters[character][1] > 0
+            has_non_neighbor_red_species = self.character_counters[character][0] < len(self.species['red'])
             # Compute partition
             if has_black_species and has_red_species and has_non_neighbor_red_species:
                 temp_intersection.add(character)
@@ -277,7 +308,7 @@ class RedBlackGraph:
                 temp_universal.add(character)
             elif all(neighbor in self.species['red'] for neighbor in neighbors):
                 temp_contained.add(character)
-                
+    
         # Update the sets
         self.characters['intersection'] = temp_intersection
         self.characters['universal'] = temp_universal
@@ -323,7 +354,6 @@ class RedBlackGraph:
                 s = set(self.graph.neighbors(character)).intersection(set(self.species['black'])) -  min_black_neighbors
                 if len(s) > 0 : 
                     species_out_of_minimal.append( (character,len(s)) )
-        print(species_out_of_minimal)
+        # Return the maximal character in the order
+        #print(species_out_of_minimal)
         return [s[0] for s in sorted(species_out_of_minimal, key=lambda x: x[1], reverse=True)]
-        
-    
